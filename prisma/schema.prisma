@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Pokemon {
+  id      Int            @id @default(autoincrement())
+  name    String
+  entries PokedexEntry[]
+}
+
+model Game {
+  id         Int            @id @default(autoincrement())
+  name       String
+  generation Int
+  entries    PokedexEntry[]
+  tms        TM[]
+  evolutions Evolution[]
+}
+
+model Type {
+  id                     Int                 @id @default(autoincrement())
+  name                   String
+  entries1               PokedexEntry[]      @relation("Type1")
+  entries2               PokedexEntry[]      @relation("Type2")
+  attacks                Attack[]
+  attackingEffectiveness TypeEffectiveness[] @relation("AttackType")
+  defendingEffectiveness TypeEffectiveness[] @relation("DefenseType")
+  forms1                 PokemonForm[]       @relation("FormType1")
+  forms2                 PokemonForm[]       @relation("FormType2")
+}
+
+model TypeEffectiveness {
+  attack_type_id  Int
+  defense_type_id Int
+  multiplier      Float
+  attackType      Type  @relation("AttackType",  fields: [attack_type_id],  references: [id])
+  defenseType     Type  @relation("DefenseType", fields: [defense_type_id], references: [id])
+
+  @@id([attack_type_id, defense_type_id])
+}
+
+model Item {
+  id          Int         @id @default(autoincrement())
+  name        String
+  description String?
+  evolutions  Evolution[]
+}
+
+model PokedexEntry {
+  id                  Int              @id @default(autoincrement())
+  pokemon_id          Int
+  game_id             Int
+  type1_id            Int
+  type2_id            Int?
+  description         String?
+  location            String?
+  regional_dex_number Int?
+  pokemon             Pokemon          @relation(fields: [pokemon_id],  references: [id])
+  game                Game             @relation(fields: [game_id],     references: [id])
+  type1               Type             @relation("Type1", fields: [type1_id], references: [id])
+  type2               Type?            @relation("Type2", fields: [type2_id], references: [id])
+  stats               Stats?
+  evYield             EV_Yield?
+  attacks             PokemonAttack[]
+  abilities           PokemonAbility[]
+  formsFrom           Evolution[]      @relation("EvolutionFrom")
+  formsTo             Evolution[]      @relation("EvolutionTo")
+  forms               PokemonForm[]
+  sprites             PokemonSprite[]
+}
+
+model Stats {
+  id               Int          @id @default(autoincrement())
+  pokedex_entry_id Int          @unique
+  hp               Int
+  attack           Int
+  defense          Int
+  sp_attack        Int
+  sp_defense       Int
+  speed            Int
+  pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
+}
+
+model EV_Yield {
+  id               Int          @id @default(autoincrement())
+  pokedex_entry_id Int          @unique
+  hp               Int
+  attack           Int
+  defense          Int
+  sp_attack        Int
+  sp_defense       Int
+  speed            Int
+  pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
+}
+
+model Attack {
+  id          Int             @id @default(autoincrement())
+  name        String
+  type_id     Int
+  power       Int?
+  accuracy    Int?
+  category    String?
+  description String?
+  type        Type            @relation(fields: [type_id], references: [id])
+  pokemons    PokemonAttack[]
+  tms         TM[]
+}
+
+model AttackMethod {
+  id      Int             @id @default(autoincrement())
+  name    String
+  attacks PokemonAttack[]
+}
+
+model TM {
+  id        Int    @id @default(autoincrement())
+  number    Int
+  game_id   Int
+  attack_id Int
+  game      Game   @relation(fields: [game_id],   references: [id])
+  attack    Attack @relation(fields: [attack_id], references: [id])
+}
+
+model PokemonAttack {
+  pokedex_entry_id Int
+  attack_id        Int
+  method_id        Int
+  level_learned    Int?
+  pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
+  attack           Attack       @relation(fields: [attack_id],        references: [id])
+  method           AttackMethod @relation(fields: [method_id],        references: [id])
+
+  @@id([pokedex_entry_id, attack_id, method_id])
+}
+
+model Ability {
+  id          Int              @id @default(autoincrement())
+  name        String
+  description String?
+  pokemons    PokemonAbility[]
+}
+
+model PokemonAbility {
+  pokedex_entry_id Int
+  ability_id       Int
+  is_hidden        Boolean      @default(false)
+  pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
+  ability          Ability      @relation(fields: [ability_id],       references: [id])
+
+  @@id([pokedex_entry_id, ability_id])
+}
+
+model Evolution {
+  id               Int          @id @default(autoincrement())
+  from_entry_id    Int
+  to_entry_id      Int
+  game_id          Int?
+  item_id          Int?
+  level_needed     Int?
+  location_needed  String?
+  condition        String?
+  fromEntry        PokedexEntry @relation("EvolutionFrom", fields: [from_entry_id], references: [id])
+  toEntry          PokedexEntry @relation("EvolutionTo",   fields: [to_entry_id],   references: [id])
+  game             Game?        @relation(fields: [game_id],  references: [id])
+  item             Item?        @relation(fields: [item_id],  references: [id])
+}
+
+model PokemonForm {
+  id               Int             @id @default(autoincrement())
+  pokedex_entry_id Int
+  name             String
+  form_type        String
+  type1_id         Int
+  type2_id         Int?
+  pokedexEntry     PokedexEntry    @relation(fields: [pokedex_entry_id], references: [id])
+  type1            Type            @relation("FormType1", fields: [type1_id], references: [id])
+  type2            Type?           @relation("FormType2", fields: [type2_id], references: [id])
+  sprites          PokemonSprite[]
+}
+
+model PokemonSprite {
+  id               Int          @id @default(autoincrement())
+  pokedex_entry_id Int
+  form_id          Int?
+  variant          String
+  sprite_url       String
+  pokedexEntry     PokedexEntry  @relation(fields: [pokedex_entry_id], references: [id])
+  form             PokemonForm?  @relation(fields: [form_id],          references: [id])
+}
