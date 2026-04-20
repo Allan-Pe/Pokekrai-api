@@ -403,27 +403,35 @@ async function seedAttackMethods() {
   async function seedTMs() {
     console.log('Seeding TMs...')
   
-    const { data } = await axios.get(`${POKEAPI}/machine?limit=100`)
+    const { data } = await axios.get(`${POKEAPI}/machine`)
   
     for (const m of data.results) {
       const { data: machineData } = await axios.get(m.url)
   
-      // Only Gen 1 TMs (red-blue and yellow)
       if (!['red-blue', 'yellow'].includes(machineData.version_group.name)) continue
   
-      const attackId = Number(machineData.move.url.split('/').at(-2))
-      const gameId   = machineData.version_group.name === 'yellow' ? 3 : 1
+      const attackId  = Number(machineData.move.url.split('/').at(-2))
+      const gameId    = machineData.version_group.name === 'yellow' ? 3 : 1
+      const itemName: string = machineData.item.name.toLowerCase()
+
+      // PokeAPI uses tmXX/hmXX naming; we map to CT/CS for API output.
+      const isCT = itemName.startsWith('tm')
+      const isCS = itemName.startsWith('hm')
+      if (!isCT && !isCS) continue
   
-      // Check attack exists in our DB
+      const num = parseInt(itemName.replace('tm', '').replace('hm', ''), 10)
+      if (Number.isNaN(num)) continue
+      const number = isCS ? num + 50 : num
+  
       const attack = await prisma.attack.findUnique({ where: { id: attackId } })
       if (!attack) continue
   
       await prisma.tM.upsert({
         where: { id: machineData.id },
-        update: {},
+        update: { number },
         create: {
           id:        machineData.id,
-          number: Number(machineData.item.url.split('/').at(-2)),
+          number,
           game_id:   gameId,
           attack_id: attackId,
         },
