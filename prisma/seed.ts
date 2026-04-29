@@ -103,7 +103,34 @@ async function seedPokedexEntries() {
   for (const p of data.results) {
     const { data: pokemon } = await axios.get(p.url)
 
-    // Only inserting entries for Red version for now
+    // 👉 Species data (category + capture + gender)
+    const { data: species } = await axios.get(
+      `${POKEAPI}/pokemon-species/${pokemon.id}`
+    )
+
+    // Category
+    const genus = species.genera.find(
+      (g) => g.language.name === 'en'
+    )?.genus
+
+    // Capture rate
+    const captureRate = species.capture_rate
+
+    // Gender ratio
+    const genderRate = species.gender_rate
+
+    let malePercent = null
+    let femalePercent = null
+
+    if (genderRate === -1) {
+      // genderless
+      malePercent = 0
+      femalePercent = 0
+    } else {
+      femalePercent = (genderRate / 8) * 100
+      malePercent = 100 - femalePercent
+    }
+
     const entry = await prisma.pokedexEntry.upsert({
       where: { pokemon_id: pokemon.id },
       update: {},
@@ -111,8 +138,17 @@ async function seedPokedexEntries() {
         id: pokemon.id,
         pokemon_id: pokemon.id,
         type1_id: Number(pokemon.types[0].type.url.split('/').at(-2)),
-        type2_id: pokemon.types[1] ? Number(pokemon.types[1].type.url.split('/').at(-2)) : null,
+        type2_id: pokemon.types[1]
+          ? Number(pokemon.types[1].type.url.split('/').at(-2))
+          : null,
         regional_dex_number: pokemon.id,
+
+        weight: pokemon.weight / 10,
+        height: pokemon.height / 10,
+        category: genus,
+        capture_rate: captureRate,
+        male: malePercent,
+        female: femalePercent,
       },
     })
 
@@ -121,12 +157,12 @@ async function seedPokedexEntries() {
       update: {},
       create: {
         pokedex_entry_id: entry.id,
-        hp:         pokemon.stats[0].base_stat,
-        attack:     pokemon.stats[1].base_stat,
-        defense:    pokemon.stats[2].base_stat,
-        sp_attack:  pokemon.stats[3].base_stat,
+        hp: pokemon.stats[0].base_stat,
+        attack: pokemon.stats[1].base_stat,
+        defense: pokemon.stats[2].base_stat,
+        sp_attack: pokemon.stats[3].base_stat,
         sp_defense: pokemon.stats[4].base_stat,
-        speed:      pokemon.stats[5].base_stat,
+        speed: pokemon.stats[5].base_stat,
       },
     })
 
@@ -135,12 +171,12 @@ async function seedPokedexEntries() {
       update: {},
       create: {
         pokedex_entry_id: entry.id,
-        hp:         pokemon.stats[0].effort,
-        attack:     pokemon.stats[1].effort,
-        defense:    pokemon.stats[2].effort,
-        sp_attack:  pokemon.stats[3].effort,
+        hp: pokemon.stats[0].effort,
+        attack: pokemon.stats[1].effort,
+        defense: pokemon.stats[2].effort,
+        sp_attack: pokemon.stats[3].effort,
         sp_defense: pokemon.stats[4].effort,
-        speed:      pokemon.stats[5].effort,
+        speed: pokemon.stats[5].effort,
       },
     })
 

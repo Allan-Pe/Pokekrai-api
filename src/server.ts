@@ -1,9 +1,14 @@
 import Fastify from 'fastify'
-import pokemonRoutes from './routes/pokemon.ts'
+import cors from '@fastify/cors'
+import pokemonRoutes from './routes/pokemon.js'
 
 const server = Fastify({ logger: true })
 
-server.register(pokemonRoutes)
+await server.register(cors, {
+  origin: 'http://localhost:5173',
+})
+
+await server.register(pokemonRoutes)
 
 server.listen({ port: 3000, host: '0.0.0.0' }, (err) => {
   if (err) {
