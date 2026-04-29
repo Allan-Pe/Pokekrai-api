@@ -39,54 +39,143 @@ export default async function pokemonRoutes(server: FastifyInstance) {
   // GET /pokemon/:id — détail sans attaques
   server.get('/pokemon/:id', async (request, reply) => {
     const { id } = request.params as { id: string }
-
-    const pokemon = await prisma.pokemon.findUnique({
-      where: { id: Number(id) },
-      include: {
-        entries: {
-          take: 1,
-          include: {
-            type1:   true,
-            type2:   true,
-            stats:   true,
-            evYield: true,
-            sprites: true,
+  
+    async function getFullEvolutionChain(
+      entryId: number,
+      direction: 'next' | 'pre'
+    ): Promise<{ pokedex_id: number; name: string; condition: string | null }[]> {
+      const results: { pokedex_id: number; name: string; condition: string | null }[] = []
+  
+      const evolutions = direction === 'next'
+        ? await prisma.evolution.findMany({
+            where: { from_entry_id: entryId },
+            include: {
+              toEntry: { include: { pokemon: true } },
+              item: true,
+            },
+          })
+        : await prisma.evolution.findMany({
+            where: { to_entry_id: entryId },
+            include: {
+              fromEntry: { include: { pokemon: true } },
+              item: true,
+            },
+          })
+  
+      for (const e of evolutions) {
+        const targetEntry = direction === 'next'
+          ? (e as any).toEntry
+          : (e as any).fromEntry
+  
+        const condition = e.level_needed
+          ? `Niveau ${e.level_needed}`
+          : e.item?.name
+            ? `Pierre ${e.item.name}`
+            : e.condition ?? null
+  
+        results.push({
+          pokedex_id: targetEntry.pokemon_id,
+          name:       targetEntry.pokemon.name,
+          condition,
+        })
+  
+        const deeper = await getFullEvolutionChain(targetEntry.id, direction)
+        results.push(...deeper)
+      }
+  
+      return results
+    }
+  
+    const [pokemon, entry] = await Promise.all([
+      prisma.pokemon.findUnique({
+        where: { id: Number(id) },
+        include: {
+          entries: {
+            take: 1,
+            include: {
+              type1:   true,
+              type2:   true,
+              stats:   true,
+              evYield: true,
+              sprites: true,
+            },
           },
         },
-      },
-    })
-
-    if (!pokemon) {
+      }),
+      prisma.pokedexEntry.findFirst({
+        where: { pokemon_id: Number(id) },
+      }),
+    ])
+  
+    if (!pokemon || !entry) {
       return reply.status(404).send({ error: 'Pokemon not found' })
     }
-
-    const entry = pokemon.entries[0]
-
+  
+    const mainEntry = pokemon.entries[0]
+  
+    const typeIds = [mainEntry?.type1_id, mainEntry?.type2_id].filter(Boolean) as number[]
+  
+    const [effectiveness, allTypes, pre, next] = await Promise.all([
+      prisma.typeEffectiveness.findMany({
+        where: { defense_type_id: { in: typeIds } },
+        include: { attackType: true },
+      }),
+      prisma.type.findMany(),
+      getFullEvolutionChain(entry.id, 'pre'),
+      getFullEvolutionChain(entry.id, 'next'),
+    ])
+  
+    const multiplierMap = new Map<string, number>()
+    for (const t of allTypes) {
+      multiplierMap.set(t.name, 1)
+    }
+    for (const e of effectiveness) {
+      const typeName = e.attackType.name
+      const current  = multiplierMap.get(typeName) ?? 1
+      multiplierMap.set(typeName, current * e.multiplier)
+    }
+  
+    const type_effectiveness = Array.from(multiplierMap.entries())
+      .map(([name, multiplier]) => ({ name, multiplier }))
+      .sort((a, b) => b.multiplier - a.multiplier)
+  
     const sprites = Object.fromEntries(
-      entry?.sprites.map(s => [s.variant, s.sprite_url]) ?? []
+      mainEntry?.sprites.map(s => [s.variant, s.sprite_url]) ?? []
     )
+  
+    const evolutions = {
+      pre:  pre.length  ? pre  : null,
+      next: next.length ? next : null,
+      mega: null,
+    }
 
+    const types = [
+      { name: mainEntry?.type1.name },
+      mainEntry?.type2 ? { name: mainEntry.type2.name } : null,
+    ].filter(Boolean)
+  
     return {
       id:    pokemon.id,
       name:  pokemon.name,
-      type1: entry?.type1.name ?? null,
-      type2: entry?.type2?.name ?? null,
+      types: types,
       stats: {
-        hp:         entry?.stats?.hp,
-        attack:     entry?.stats?.attack,
-        defense:    entry?.stats?.defense,
-        sp_attack:  entry?.stats?.sp_attack,
-        sp_defense: entry?.stats?.sp_defense,
-        speed:      entry?.stats?.speed,
+        hp:         mainEntry?.stats?.hp,
+        atk:     mainEntry?.stats?.attack,
+        def:    mainEntry?.stats?.defense,
+        spe_atk:  mainEntry?.stats?.sp_attack,
+        spe_def: mainEntry?.stats?.sp_defense,
+        speed:      mainEntry?.stats?.speed,
       },
       ev_yield: {
-        hp:         entry?.evYield?.hp,
-        attack:     entry?.evYield?.attack,
-        defense:    entry?.evYield?.defense,
-        sp_attack:  entry?.evYield?.sp_attack,
-        sp_defense: entry?.evYield?.sp_defense,
-        speed:      entry?.evYield?.speed,
+        hp:         mainEntry?.evYield?.hp,
+        atk:     mainEntry?.evYield?.attack,
+        def:    mainEntry?.evYield?.defense,
+        spe_atk:  mainEntry?.evYield?.sp_attack,
+        spe_def: mainEntry?.evYield?.sp_defense,
+        speed:      mainEntry?.evYield?.speed,
       },
+      type_effectiveness,
+      evolutions,
       sprites,
     }
   })
