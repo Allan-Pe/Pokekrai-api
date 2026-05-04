@@ -13,13 +13,23 @@ model Pokemon {
   entries PokedexEntry[]
 }
 
+model VersionGroup {
+  id             Int                   @id @default(autoincrement())
+  name           String                @unique
+  generation     Int
+  games          Game[]
+  pokemonAttacks PokemonAttack[]
+  pokedexData    PokedexEntryVersion[]
+}
+
 model Game {
-  id         Int            @id @default(autoincrement())
-  name       String
-  generation Int
-  entries    PokedexEntry[]
-  tms        TM[]
-  evolutions Evolution[]
+  id               Int          @id @default(autoincrement())
+  name             String       @unique
+  generation       Int
+  version_group_id Int
+  versionGroup     VersionGroup @relation(fields: [version_group_id], references: [id])
+  tms              TM[]
+  evolutions       Evolution[]
 }
 
 model Type {
@@ -38,7 +48,7 @@ model TypeEffectiveness {
   attack_type_id  Int
   defense_type_id Int
   multiplier      Float
-  attackType      Type  @relation("AttackType",  fields: [attack_type_id],  references: [id])
+  attackType      Type  @relation("AttackType", fields: [attack_type_id], references: [id])
   defenseType     Type  @relation("DefenseType", fields: [defense_type_id], references: [id])
 
   @@id([attack_type_id, defense_type_id])
@@ -52,26 +62,41 @@ model Item {
 }
 
 model PokedexEntry {
-  id                  Int              @id @default(autoincrement())
-  pokemon_id          Int
-  game_id             Int
+  id                  Int                   @id @default(autoincrement())
+  pokemon_id          Int                   @unique
   type1_id            Int
   type2_id            Int?
-  description         String?
-  location            String?
   regional_dex_number Int?
-  pokemon             Pokemon          @relation(fields: [pokemon_id],  references: [id])
-  game                Game             @relation(fields: [game_id],     references: [id])
-  type1               Type             @relation("Type1", fields: [type1_id], references: [id])
-  type2               Type?            @relation("Type2", fields: [type2_id], references: [id])
+  weight              Float?
+  height              Float?
+  category            String?
+  capture_rate        Float?
+  male                Float?
+  female              Float?
+  pokemon             Pokemon               @relation(fields: [pokemon_id], references: [id])
+  type1               Type                  @relation("Type1", fields: [type1_id], references: [id])
+  type2               Type?                 @relation("Type2", fields: [type2_id], references: [id])
   stats               Stats?
   evYield             EV_Yield?
   attacks             PokemonAttack[]
+  versions            PokedexEntryVersion[]
   abilities           PokemonAbility[]
-  formsFrom           Evolution[]      @relation("EvolutionFrom")
-  formsTo             Evolution[]      @relation("EvolutionTo")
+  formsFrom           Evolution[]           @relation("EvolutionFrom")
+  formsTo             Evolution[]           @relation("EvolutionTo")
   forms               PokemonForm[]
   sprites             PokemonSprite[]
+}
+
+model PokedexEntryVersion {
+  id               Int          @id @default(autoincrement())
+  pokedex_entry_id Int
+  version_group_id Int
+  description      String?
+  location         String?
+  pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
+  versionGroup     VersionGroup @relation(fields: [version_group_id], references: [id])
+
+  @@unique([pokedex_entry_id, version_group_id])
 }
 
 model Stats {
@@ -122,7 +147,7 @@ model TM {
   number    Int
   game_id   Int
   attack_id Int
-  game      Game   @relation(fields: [game_id],   references: [id])
+  game      Game   @relation(fields: [game_id], references: [id])
   attack    Attack @relation(fields: [attack_id], references: [id])
 }
 
@@ -130,12 +155,14 @@ model PokemonAttack {
   pokedex_entry_id Int
   attack_id        Int
   method_id        Int
+  version_group_id Int
   level_learned    Int?
   pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
-  attack           Attack       @relation(fields: [attack_id],        references: [id])
-  method           AttackMethod @relation(fields: [method_id],        references: [id])
+  attack           Attack       @relation(fields: [attack_id], references: [id])
+  method           AttackMethod @relation(fields: [method_id], references: [id])
+  versionGroup     VersionGroup @relation(fields: [version_group_id], references: [id])
 
-  @@id([pokedex_entry_id, attack_id, method_id])
+  @@id([pokedex_entry_id, attack_id, method_id, version_group_id])
 }
 
 model Ability {
@@ -150,24 +177,24 @@ model PokemonAbility {
   ability_id       Int
   is_hidden        Boolean      @default(false)
   pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
-  ability          Ability      @relation(fields: [ability_id],       references: [id])
+  ability          Ability      @relation(fields: [ability_id], references: [id])
 
   @@id([pokedex_entry_id, ability_id])
 }
 
 model Evolution {
-  id               Int          @id @default(autoincrement())
-  from_entry_id    Int
-  to_entry_id      Int
-  game_id          Int?
-  item_id          Int?
-  level_needed     Int?
-  location_needed  String?
-  condition        String?
-  fromEntry        PokedexEntry @relation("EvolutionFrom", fields: [from_entry_id], references: [id])
-  toEntry          PokedexEntry @relation("EvolutionTo",   fields: [to_entry_id],   references: [id])
-  game             Game?        @relation(fields: [game_id],  references: [id])
-  item             Item?        @relation(fields: [item_id],  references: [id])
+  id              Int          @id @default(autoincrement())
+  from_entry_id   Int
+  to_entry_id     Int
+  game_id         Int?
+  item_id         Int?
+  level_needed    Int?
+  location_needed String?
+  condition       String?
+  fromEntry       PokedexEntry @relation("EvolutionFrom", fields: [from_entry_id], references: [id])
+  toEntry         PokedexEntry @relation("EvolutionTo", fields: [to_entry_id], references: [id])
+  game            Game?        @relation(fields: [game_id], references: [id])
+  item            Item?        @relation(fields: [item_id], references: [id])
 }
 
 model PokemonForm {
@@ -189,6 +216,6 @@ model PokemonSprite {
   form_id          Int?
   variant          String
   sprite_url       String
-  pokedexEntry     PokedexEntry  @relation(fields: [pokedex_entry_id], references: [id])
-  form             PokemonForm?  @relation(fields: [form_id],          references: [id])
+  pokedexEntry     PokedexEntry @relation(fields: [pokedex_entry_id], references: [id])
+  form             PokemonForm? @relation(fields: [form_id], references: [id])
 }
