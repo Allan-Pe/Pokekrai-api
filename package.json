@@ -1,5 +1,10 @@
 {
   "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "node dist/server.js",
+    "build": "tsc"
+  },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
     "@prisma/client": "^6.19.3",
